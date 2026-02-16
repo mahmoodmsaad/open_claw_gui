@@ -8,6 +8,7 @@ type ProgressCallback = (event: InstallProgressEvent) => void;
 
 const OPENCLAW_UPSTREAM = "$HOME/openclaw-upstream";
 const OPENCLAW_REPO = "https://github.com/openclaw/openclaw.git";
+const OPENCLAW_INSTALL_URL = "https://openclaw.ai/install.sh";
 
 export class InstallService {
   constructor(private readonly wslService: WslService) {}
@@ -23,9 +24,10 @@ export class InstallService {
       logger.info(`[bootstrap:${event.step}] ${event.message}`);
     };
 
-    const tag = versionTag ?? (await this.readPinnedVersionTag());
+    const rawTag = versionTag ?? (await this.readPinnedVersionTag());
+    const requestedVersion = this.normalizeVersion(rawTag);
 
-    emit(this.event("preflight", `Using OpenClaw version tag ${tag}.`, true));
+    emit(this.event("preflight", `Using OpenClaw version ${requestedVersion}.`, true));
     await this.requireSuccessful(
       this.wslService.runBash("command -v git >/dev/null && command -v curl >/dev/null"),
       "Required WSL packages missing (git/curl). Install them in Ubuntu and retry."
@@ -45,38 +47,46 @@ export class InstallService {
       "Failed to clone OpenClaw upstream repository."
     );
 
-    emit(this.event("checkout", `Checking out tag ${tag}.`, true));
-    await this.requireSuccessful(
-      this.wslService.runBash(
-        [
-          "set -euo pipefail",
-          `cd ${OPENCLAW_UPSTREAM}`,
-          "git fetch --tags --force",
-          `git checkout ${bashQuote(tag)}`
-        ].join("\n"),
-        { timeoutMs: 120_000 }
-      ),
-      `Failed to checkout OpenClaw tag ${tag}.`
+    const checkoutResult = await this.wslService.runBash(
+      [
+        "set -euo pipefail",
+        `cd ${OPENCLAW_UPSTREAM}`,
+        "git fetch --tags --force",
+        `git checkout ${bashQuote(rawTag)}`
+      ].join("\n"),
+      { timeoutMs: 120_000 }
     );
+    if (checkoutResult.exitCode === 0) {
+      emit(this.event("checkout", `Checked out upstream tag/ref ${rawTag}.`, true));
+    } else {
+      emit(
+        this.event(
+          "checkout",
+          `Could not checkout ${rawTag}; continuing with installer version ${requestedVersion}.`,
+          false
+        )
+      );
+    }
 
-    emit(this.event("install", "Running OpenClaw installer.", true));
+    emit(this.event("install", `Running OpenClaw installer (${requestedVersion}).`, true));
+    let installResult = await this.installOpenClaw(requestedVersion);
+    if (installResult.exitCode !== 0 && requestedVersion !== "latest") {
+      emit(
+        this.event(
+          "install",
+          `Install for ${requestedVersion} failed; retrying with latest.`,
+          false
+        )
+      );
+      installResult = await this.installOpenClaw("latest");
+    }
+    if (installResult.exitCode !== 0) {
+      throw new Error(installResult.stderr.trim() || "OpenClaw installer failed.");
+    }
+
     await this.requireSuccessful(
-      this.wslService.runBash(
-        [
-          "set -euo pipefail",
-          `cd ${OPENCLAW_UPSTREAM}`,
-          "if [ -x ./install.sh ]; then",
-          "  ./install.sh --yes --auth-choice none --no-daemon-start --no-browser-open",
-          "elif [ -x ./scripts/install.sh ]; then",
-          "  ./scripts/install.sh --yes --auth-choice none --no-daemon-start --no-browser-open",
-          "else",
-          "  echo \"OpenClaw install script not found.\" >&2",
-          "  exit 1",
-          "fi"
-        ].join("\n"),
-        { timeoutMs: 360_000 }
-      ),
-      "OpenClaw installer failed."
+      this.wslService.runBash("command -v openclaw >/dev/null 2>&1"),
+      "OpenClaw installed but CLI is not on PATH in WSL."
     );
 
     emit(this.event("configure", "Creating OpenClaw configuration directory.", true));
@@ -93,10 +103,32 @@ export class InstallService {
     try {
       const raw = await fs.readFile(getVersionLockPath(), "utf8");
       const tag = raw.trim();
-      return tag || "main";
+      return tag || "latest";
     } catch {
-      return "main";
+      return "latest";
     }
+  }
+
+  private normalizeVersion(raw: string): string {
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed === "main" || trimmed === "master") {
+      return "latest";
+    }
+    return trimmed;
+  }
+
+  private async installOpenClaw(version: string): Promise<{ exitCode: number; stderr: string }> {
+    return this.wslService.runBash(
+      [
+        "set -euo pipefail",
+        "export OPENCLAW_NO_PROMPT=1",
+        "export OPENCLAW_NO_ONBOARD=1",
+        "export OPENCLAW_USE_GUM=0",
+        `export OPENCLAW_VERSION=${bashQuote(version)}`,
+        `curl -fsSL --proto '=https' --tlsv1.2 ${OPENCLAW_INSTALL_URL} | bash`
+      ].join("\n"),
+      { timeoutMs: 480_000 }
+    );
   }
 
   private event(

@@ -18,7 +18,7 @@ export type PrereqStatus = {
   ok: boolean;
   platform: string;
   checks: Array<{
-    id: "windows" | "wsl" | "ubuntu" | "internet" | "git";
+    id: "windows" | "wsl" | "ubuntu" | "openclaw" | "internet" | "git";
     ok: boolean;
     detail: string;
   }>;

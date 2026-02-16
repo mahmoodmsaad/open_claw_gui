@@ -30,6 +30,13 @@ export class PrereqService {
         : "Ubuntu WSL distro not found. Install Ubuntu and set WSL2 default."
     });
 
+    const openClawCheck = await this.checkWslCommand("openclaw");
+    checks.push({
+      id: "openclaw",
+      ok: openClawCheck.ok,
+      detail: openClawCheck.detail
+    });
+
     const gitCheck = await this.checkCommand("git");
     checks.push({
       id: "git",
@@ -83,6 +90,25 @@ export class PrereqService {
       return { ok: false, detail: message };
     } finally {
       clearTimeout(timeout);
+    }
+  }
+
+  private async checkWslCommand(command: string): Promise<{ ok: boolean; detail: string }> {
+    try {
+      const result = await this.wslService.runBash(`command -v ${command}`, {
+        timeoutMs: 10_000
+      });
+      if (result.exitCode === 0 && result.stdout.trim()) {
+        return { ok: true, detail: `${command} found in WSL at ${result.stdout.trim()}.` };
+      }
+      const errorText = result.stderr.trim();
+      return {
+        ok: false,
+        detail: errorText || `${command} CLI not found in WSL. Run Setup -> Install OpenClaw.`
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "WSL command lookup failed";
+      return { ok: false, detail: message };
     }
   }
 }

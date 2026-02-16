@@ -60,7 +60,14 @@ export function App() {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [defaultModel, setDefaultModel] = useState("deepseek-chat");
 
-  const setupComplete = useMemo(() => configuredProviders.length > 0, [configuredProviders]);
+  const openClawInstalled = useMemo(
+    () => prereqs?.checks.some((check) => check.id === "openclaw" && check.ok) ?? false,
+    [prereqs]
+  );
+  const setupComplete = useMemo(
+    () => configuredProviders.length > 0 && openClawInstalled,
+    [configuredProviders, openClawInstalled]
+  );
 
   useEffect(() => {
     void refreshAll();
@@ -139,7 +146,7 @@ export function App() {
       );
       setInstallHistory(events);
       setStatusMessage("Bootstrap completed.");
-      await refreshPrereqs();
+      await Promise.all([refreshPrereqs(), refreshGateway()]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Bootstrap failed.";
       setStatusMessage(message);
@@ -199,6 +206,11 @@ export function App() {
 
   async function handleFinalizeSetup(): Promise<void> {
     if (!settings) {
+      return;
+    }
+    if (!openClawInstalled) {
+      setStatusMessage("OpenClaw CLI is not installed in WSL. Run Step 2 first.");
+      setActiveTab("setup");
       return;
     }
     const enabledProviders = configuredProviders;
@@ -336,7 +348,7 @@ export function App() {
                 <input
                   value={versionTagInput}
                   onChange={(event) => setVersionTagInput(event.target.value)}
-                  placeholder="v0.5.0"
+                  placeholder="latest"
                 />
               </label>
               <button className="btn primary" disabled={installRunning} onClick={() => void handleBootstrap()}>
@@ -392,6 +404,11 @@ export function App() {
 
             <div className="card">
               <div className="card-title">Step 4: Finalize profile and launch</div>
+              {!openClawInstalled && (
+                <p className="text-warn">
+                  Install OpenClaw in Step 2 before finalizing setup.
+                </p>
+              )}
               <label className="field">
                 <span>Default model</span>
                 <input
@@ -437,6 +454,13 @@ export function App() {
             ) : (
               <div className="empty-state">
                 Start the gateway to load the embedded dashboard.
+                {gateway.error?.includes("openclaw CLI not found") && (
+                  <div style={{ marginTop: 12 }}>
+                    <button className="btn primary" onClick={() => setActiveTab("setup")}>
+                      Go To Setup
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </section>
