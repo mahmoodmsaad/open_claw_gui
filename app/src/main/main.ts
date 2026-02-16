@@ -44,7 +44,7 @@ async function createMainWindow(): Promise<BrowserWindow> {
     minWidth: 1040,
     minHeight: 700,
     title: "OpenClaw Desktop",
-    show: false,
+    show: true,
     backgroundColor: "#0b1220",
     autoHideMenuBar: true,
     webPreferences: {
@@ -58,6 +58,27 @@ async function createMainWindow(): Promise<BrowserWindow> {
   window.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
     return { action: "deny" };
+  });
+
+  window.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedUrl) => {
+    logger.error(
+      `Renderer failed to load: code=${errorCode}, description=${errorDescription}, url=${validatedUrl}`
+    );
+    const html = `
+      <html>
+        <body style="font-family:Segoe UI,sans-serif;background:#0f1624;color:#f8d7da;padding:16px;">
+          <h2>OpenClaw Desktop failed to load UI</h2>
+          <p>Error code: ${errorCode}</p>
+          <p>Error: ${errorDescription}</p>
+          <p>URL: ${validatedUrl}</p>
+        </body>
+      </html>
+    `;
+    void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  });
+
+  window.webContents.on("render-process-gone", (_event, details) => {
+    logger.error(`Renderer process gone: reason=${details.reason}, exitCode=${details.exitCode}`);
   });
 
   window.on("close", (event) => {
@@ -74,10 +95,6 @@ async function createMainWindow(): Promise<BrowserWindow> {
   } else {
     await window.loadFile(rendererIndexPath());
   }
-
-  window.once("ready-to-show", () => {
-    window.show();
-  });
 
   return window;
 }
