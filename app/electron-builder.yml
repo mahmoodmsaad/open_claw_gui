@@ -1,0 +1,48 @@
+appId: ai.openclaw.desktop
+productName: OpenClaw Desktop
+copyright: Copyright (c) 2026 Mahmo
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - package.json
+extraResources:
+  - from: ../state/version.lock
+    to: version.lock
+  - from: resources/provider-presets.json
+    to: provider-presets.json
+asar: true
+win:
+  signAndEditExecutable: false
+  icon: build/icon.ico
+  verifyUpdateCodeSignature: false
+  requestedExecutionLevel: asInvoker
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: OpenClaw Desktop
+  uninstallDisplayName: OpenClaw Desktop
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+  deleteAppDataOnUninstall: false
+  artifactName: OpenClaw-Desktop-${version}-${os}-${arch}-installer.${ext}
+portable:
+  artifactName: OpenClaw-Desktop-${version}-${os}-${arch}-portable.${ext}
+publish:
+  - provider: github
+    owner: mahmoodmsaad
+    repo: open_claw_gui
+    releaseType: release
+    channel: latest

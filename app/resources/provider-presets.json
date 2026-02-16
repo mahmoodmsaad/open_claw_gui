@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "defaults": {
+    "defaultModel": "deepseek-chat",
+    "fallbackChain": ["deepseek", "openai", "anthropic"]
+  },
+  "providers": {
+    "deepseek": {
+      "adapter": "openai-compatible",
+      "baseURL": "https://api.deepseek.com/v1",
+      "apiKeyEnv": "DEEPSEEK_API_KEY",
+      "models": ["deepseek-chat", "deepseek-reasoner"]
+    },
+    "openai": {
+      "adapter": "openai",
+      "apiKeyEnv": "OPENAI_API_KEY",
+      "models": ["gpt-4.1-mini", "gpt-4.1"]
+    },
+    "anthropic": {
+      "adapter": "anthropic",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "models": ["claude-3-5-haiku-latest", "claude-3-7-sonnet-latest"]
+    }
+  },
+  "web_search": {
+    "provider": "perplexity",
+    "model": "sonar",
+    "apiKeyEnv": "PERPLEXITY_API_KEY"
+  }
+}
